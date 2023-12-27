@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -74,4 +77,64 @@ func TestBuscarPorCPF(t *testing.T) {
 	r.ServeHTTP(resposta, requisicao)
 
 	assert.Equal(t, http.StatusOK, resposta.Code)
+}
+
+func TestBuscarAlunoID(t *testing.T) {
+	database.ConectaComBancoDeDados()
+	CriaAlunoMock()
+	defer DeletaAlunoMock()
+	r := SetUpRotasTeste()
+	r.GET("/alunos/:id", controllers.BuscaAlunoPorID)
+
+	path := "/alunos/" + strconv.Itoa(ID)
+	requisicao, _ := http.NewRequest("GET", path, nil)
+	resposta := httptest.NewRecorder()
+	r.ServeHTTP(resposta, requisicao)
+
+	var alunoMock models.Aluno
+	json.Unmarshal(resposta.Body.Bytes(), &alunoMock) //armazena o corpo da requisião no struct alunoMock
+
+	assert.Equal(t, "Aluno Teste", alunoMock.Nome, "Nomes devem ser iguais")
+	assert.Equal(t, "12345678910", alunoMock.CPF, "CPF devem corresponder ao aluno")
+	assert.Equal(t, "123456789", alunoMock.RG, "RG devem corresponder ao aluno")
+	assert.Equal(t, http.StatusOK, resposta.Code)
+
+}
+
+func TestDeleteAluno(t *testing.T) {
+	database.ConectaComBancoDeDados()
+	CriaAlunoMock()
+	r := SetUpRotasTeste()
+	r.DELETE("/alunos/:id", controllers.DeletaAluno)
+
+	path := "/alunos/" + strconv.Itoa(ID)
+	requisicao, _ := http.NewRequest("DELETE", path, nil)
+	resposta := httptest.NewRecorder()
+	r.ServeHTTP(resposta, requisicao)
+
+	assert.Equal(t, http.StatusOK, resposta.Code)
+}
+
+func TestEditaAluno(t *testing.T) {
+	database.ConectaComBancoDeDados()
+	CriaAlunoMock()
+	defer DeletaAlunoMock()
+	r := SetUpRotasTeste()
+	r.PATCH("/alunos/:id", controllers.EditaAluno)
+
+	aluno := models.Aluno{Nome: "Aluno Teste", CPF: "47123456789", RG: "123456700"}
+	valorJson, _ := json.Marshal(aluno)
+
+	path := "/alunos/" + strconv.Itoa(ID)
+	requisicao, _ := http.NewRequest("PATCH", path, bytes.NewBuffer(valorJson)) //passando no body o conteúdo json para editar
+	resposta := httptest.NewRecorder()
+	r.ServeHTTP(resposta, requisicao)
+
+	var alunoAtualizado models.Aluno
+	json.Unmarshal(resposta.Body.Bytes(), &alunoAtualizado) //preenchendo a struct com a respota para verificação
+
+	assert.Equal(t, "47123456789", alunoAtualizado.CPF)
+	assert.Equal(t, "123456700", alunoAtualizado.RG)
+	assert.Equal(t, "Aluno Teste", alunoAtualizado.Nome)
+
 }
